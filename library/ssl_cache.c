@@ -25,7 +25,13 @@
 
 #if defined(MBEDTLS_SSL_CACHE_C)
 
+#if defined(MBEDTLS_PLATFORM_C)
 #include "mbedtls/platform.h"
+#else
+#include <stdlib.h>
+#define mbedtls_calloc    calloc
+#define mbedtls_free      free
+#endif
 
 #include "mbedtls/ssl_cache.h"
 #include "ssl_misc.h"
@@ -44,7 +50,6 @@ void mbedtls_ssl_cache_init( mbedtls_ssl_cache_context *cache )
 #endif
 }
 
-MBEDTLS_CHECK_RETURN_CRITICAL
 static int ssl_cache_find_entry( mbedtls_ssl_cache_context *cache,
                                  unsigned char const *session_id,
                                  size_t session_id_len,
@@ -119,7 +124,6 @@ exit:
     return( ret );
 }
 
-MBEDTLS_CHECK_RETURN_CRITICAL
 static int ssl_cache_pick_writing_slot( mbedtls_ssl_cache_context *cache,
                                         unsigned char const *session_id,
                                         size_t session_id_len,
@@ -308,11 +312,7 @@ exit:
 #endif
 
     if( session_serialized != NULL )
-    {
         mbedtls_platform_zeroize( session_serialized, session_serialized_len );
-        mbedtls_free( session_serialized );
-        session_serialized = NULL;
-    }
 
     return( ret );
 }

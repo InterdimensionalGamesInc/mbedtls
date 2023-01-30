@@ -428,7 +428,7 @@ psa_status_t mbedtls_psa_aead_update(
  *   preceding calls to mbedtls_psa_aead_update().
  * - \p tag contains the authentication tag.
  *
- * Whether or not this function returns successfully, the PSA core subsequently
+ * Whether or not this function returns successfuly, the PSA core subsequently
  * calls mbedtls_psa_aead_abort() to deactivate the operation.
  *
  * \param[in,out] operation     Active AEAD operation.
@@ -508,4 +508,4 @@ psa_status_t mbedtls_psa_aead_finish(
 psa_status_t mbedtls_psa_aead_abort(
     mbedtls_psa_aead_operation_t *operation );
 
-#endif /* PSA_CRYPTO_AEAD_H */
+#endif /* PSA_CRYPTO_AEAD */

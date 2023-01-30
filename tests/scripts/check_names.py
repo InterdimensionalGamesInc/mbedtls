@@ -36,7 +36,7 @@ NameChecker performs the following checks:
   declared in the header files. This uses the nm command.
 - All macros, constants, and identifiers (function names, struct names, etc)
   follow the required regex pattern.
-- Typo checking: All words that begin with MBED|PSA exist as macros or constants.
+- Typo checking: All words that begin with MBED exist as macros or constants.
 
 The script returns 0 on success, 1 on test failure, and 2 if there is a script
 error. It must be run from Mbed TLS root.
@@ -56,15 +56,10 @@ import shutil
 import subprocess
 import logging
 
-import scripts_path # pylint: disable=unused-import
-from mbedtls_dev import build_tree
-
-
 # Naming patterns to check against. These are defined outside the NameCheck
 # class for ease of modification.
-PUBLIC_MACRO_PATTERN = r"^(MBEDTLS|PSA)_[0-9A-Z_]*[0-9A-Z]$"
-INTERNAL_MACRO_PATTERN = r"^[0-9A-Za-z_]*[0-9A-Z]$"
-CONSTANTS_PATTERN = PUBLIC_MACRO_PATTERN
+MACRO_PATTERN = r"^(MBEDTLS|PSA)_[0-9A-Z_]*[0-9A-Z]$"
+CONSTANTS_PATTERN = MACRO_PATTERN
 IDENTIFIER_PATTERN = r"^(mbedtls|psa)_[0-9a-z_]*[0-9a-z]$"
 
 class Match(): # pylint: disable=too-few-public-methods
@@ -191,12 +186,11 @@ class PatternMismatch(Problem): # pylint: disable=too-few-public-methods
 
 class Typo(Problem): # pylint: disable=too-few-public-methods
     """
-    A problem that occurs when a word using MBED or PSA doesn't
-    appear to be defined as constants nor enum values. Created with
-    NameCheck.check_for_typos()
+    A problem that occurs when a word using MBED doesn't appear to be defined as
+    constants nor enum values. Created with NameCheck.check_for_typos()
 
     Fields:
-    * match: the Match object of the MBED|PSA name in question.
+    * match: the Match object of the MBED name in question.
     """
     def __init__(self, match):
         self.match = match
@@ -224,7 +218,7 @@ class CodeParser():
     """
     def __init__(self, log):
         self.log = log
-        build_tree.check_repo_path()
+        self.check_repo_path()
 
         # Memo for storing "glob expression": set(filepaths)
         self.files = {}
@@ -232,6 +226,15 @@ class CodeParser():
         # Globally excluded filenames.
         # Note that "*" can match directory separators in exclude lists.
         self.excluded_files = ["*/bn_mul", "*/compat-2.x.h"]
+
+    @staticmethod
+    def check_repo_path():
+        """
+        Check that the current working directory is the project root, and throw
+        an exception if not.
+        """
+        if not all(os.path.isdir(d) for d in ["include", "library", "tests"]):
+            raise Exception("This script must be run from Mbed TLS root")
 
     def comprehensive_parse(self):
         """
@@ -246,25 +249,17 @@ class CodeParser():
             .format(str(self.excluded_files))
         )
 
-        all_macros = {"public": [], "internal": [], "private":[]}
-        all_macros["public"] = self.parse_macros([
+        all_macros = self.parse_macros([
             "include/mbedtls/*.h",
             "include/psa/*.h",
+            "library/*.h",
+            "tests/include/test/drivers/*.h",
             "3rdparty/everest/include/everest/everest.h",
             "3rdparty/everest/include/everest/x25519.h"
         ])
-        all_macros["internal"] = self.parse_macros([
-            "library/*.h",
-            "tests/include/test/drivers/*.h",
-        ])
-        all_macros["private"] = self.parse_macros([
-            "library/*.c",
-        ])
         enum_consts = self.parse_enum_consts([
             "include/mbedtls/*.h",
-            "include/psa/*.h",
             "library/*.h",
-            "library/*.c",
             "3rdparty/everest/include/everest/everest.h",
             "3rdparty/everest/include/everest/x25519.h"
         ])
@@ -275,7 +270,7 @@ class CodeParser():
             "3rdparty/everest/include/everest/everest.h",
             "3rdparty/everest/include/everest/x25519.h"
         ])
-        mbed_psa_words = self.parse_mbed_psa_words([
+        mbed_words = self.parse_mbed_words([
             "include/mbedtls/*.h",
             "include/psa/*.h",
             "library/*.h",
@@ -284,35 +279,29 @@ class CodeParser():
             "library/*.c",
             "3rdparty/everest/library/everest.c",
             "3rdparty/everest/library/x25519.c"
-        ], ["library/psa_crypto_driver_wrappers.c"])
+        ])
         symbols = self.parse_symbols()
 
         # Remove identifier macros like mbedtls_printf or mbedtls_calloc
         identifiers_justname = [x.name for x in identifiers]
-        actual_macros = {"public": [], "internal": []}
-        for scope in actual_macros:
-            for macro in all_macros[scope]:
-                if macro.name not in identifiers_justname:
-                    actual_macros[scope].append(macro)
+        actual_macros = []
+        for macro in all_macros:
+            if macro.name not in identifiers_justname:
+                actual_macros.append(macro)
 
         self.log.debug("Found:")
         # Aligns the counts on the assumption that none exceeds 4 digits
-        for scope in actual_macros:
-            self.log.debug("  {:4} Total {} Macros"
-                           .format(len(all_macros[scope]), scope))
-            self.log.debug("  {:4} {} Non-identifier Macros"
-                           .format(len(actual_macros[scope]), scope))
+        self.log.debug("  {:4} Total Macros".format(len(all_macros)))
+        self.log.debug("  {:4} Non-identifier Macros".format(len(actual_macros)))
         self.log.debug("  {:4} Enum Constants".format(len(enum_consts)))
         self.log.debug("  {:4} Identifiers".format(len(identifiers)))
         self.log.debug("  {:4} Exported Symbols".format(len(symbols)))
         return {
-            "public_macros": actual_macros["public"],
-            "internal_macros": actual_macros["internal"],
-            "private_macros": all_macros["private"],
+            "macros": actual_macros,
             "enum_consts": enum_consts,
             "identifiers": identifiers,
             "symbols": symbols,
-            "mbed_psa_words": mbed_psa_words
+            "mbed_words": mbed_words
         }
 
     def is_file_excluded(self, path, exclude_wildcards):
@@ -380,28 +369,25 @@ class CodeParser():
 
         return macros
 
-    def parse_mbed_psa_words(self, include, exclude=None):
+    def parse_mbed_words(self, include, exclude=None):
         """
-        Parse all words in the file that begin with MBED|PSA, in and out of
-        macros, comments, anything.
+        Parse all words in the file that begin with MBED, in and out of macros,
+        comments, anything.
 
         Args:
         * include: A List of glob expressions to look for files through.
         * exclude: A List of glob expressions for excluding files.
 
-        Returns a List of Match objects for words beginning with MBED|PSA.
+        Returns a List of Match objects for words beginning with MBED.
         """
         # Typos of TLS are common, hence the broader check below than MBEDTLS.
-        mbed_regex = re.compile(r"\b(MBED.+?|PSA)_[A-Z0-9_]*")
+        mbed_regex = re.compile(r"\bMBED.+?_[A-Z0-9_]*")
         exclusions = re.compile(r"// *no-check-names|#error")
 
         files = self.get_files(include, exclude)
-        self.log.debug(
-            "Looking for MBED|PSA words in {} files"
-            .format(len(files))
-        )
+        self.log.debug("Looking for MBED words in {} files".format(len(files)))
 
-        mbed_psa_words = []
+        mbed_words = []
         for filename in files:
             with open(filename, "r", encoding="utf-8") as fp:
                 for line_no, line in enumerate(fp):
@@ -409,14 +395,14 @@ class CodeParser():
                         continue
 
                     for name in mbed_regex.finditer(line):
-                        mbed_psa_words.append(Match(
+                        mbed_words.append(Match(
                             filename,
                             line,
                             line_no,
                             name.span(0),
                             name.group(0)))
 
-        return mbed_psa_words
+        return mbed_words
 
     def parse_enum_consts(self, include, exclude=None):
         """
@@ -444,11 +430,8 @@ class CodeParser():
                     # Match typedefs and brackets only when they are at the
                     # beginning of the line -- if they are indented, they might
                     # be sub-structures within structs, etc.
-                    optional_c_identifier = r"([_a-zA-Z][_a-zA-Z0-9]*)?"
                     if (state == states.OUTSIDE_KEYWORD and
-                            re.search(r"^(typedef +)?enum " + \
-                                    optional_c_identifier + \
-                                    r" *{", line)):
+                            re.search(r"^(typedef +)?enum +{", line)):
                         state = states.IN_BRACES
                     elif (state == states.OUTSIDE_KEYWORD and
                           re.search(r"^(typedef +)?enum", line)):
@@ -642,7 +625,7 @@ class CodeParser():
         self.log.info("Compiling...")
         symbols = []
 
-        # Back up the config and atomically compile with the full configuration.
+        # Back up the config and atomically compile with the full configratuion.
         shutil.copy(
             "include/mbedtls/mbedtls_config.h",
             "include/mbedtls/mbedtls_config.h.bak"
@@ -758,8 +741,7 @@ class NameChecker():
         problems += self.check_symbols_declared_in_header()
 
         pattern_checks = [
-            ("public_macros", PUBLIC_MACRO_PATTERN),
-            ("internal_macros", INTERNAL_MACRO_PATTERN),
+            ("macros", MACRO_PATTERN),
             ("enum_consts", CONSTANTS_PATTERN),
             ("identifiers", IDENTIFIER_PATTERN)
         ]
@@ -831,7 +813,7 @@ class NameChecker():
 
     def check_for_typos(self):
         """
-        Perform a check that all words in the source code beginning with MBED are
+        Perform a check that all words in the soure code beginning with MBED are
         either defined as macros, or as enum constants.
         Assumes parse_names_in_source() was called before this.
 
@@ -843,16 +825,11 @@ class NameChecker():
         all_caps_names = {
             match.name
             for match
-            in self.parse_result["public_macros"] +
-            self.parse_result["internal_macros"] +
-            self.parse_result["private_macros"] +
-            self.parse_result["enum_consts"]
-            }
+            in self.parse_result["macros"] + self.parse_result["enum_consts"]}
         typo_exclusion = re.compile(r"XXX|__|_$|^MBEDTLS_.*CONFIG_FILE$|"
-                                    r"MBEDTLS_TEST_LIBTESTDRIVER*|"
-                                    r"PSA_CRYPTO_DRIVER_TEST")
+                                    r"MBEDTLS_TEST_LIBTESTDRIVER*")
 
-        for name_match in self.parse_result["mbed_psa_words"]:
+        for name_match in self.parse_result["mbed_words"]:
             found = name_match.name in all_caps_names
 
             # Since MBEDTLS_PSA_ACCEL_XXX defines are defined by the
@@ -907,7 +884,7 @@ def main():
     parser.add_argument(
         "-q", "--quiet",
         action="store_true",
-        help="hide unnecessary text, explanations, and highlights"
+        help="hide unnecessary text, explanations, and highlighs"
     )
 
     args = parser.parse_args()

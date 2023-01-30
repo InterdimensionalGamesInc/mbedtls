@@ -15,7 +15,6 @@
  *  limitations under the License.
  */
 
-#include <test/constant_flow.h>
 #include <test/helpers.h>
 #include <test/macros.h>
 #include <string.h>
@@ -48,7 +47,7 @@ void mbedtls_test_platform_teardown( void )
 #endif /* MBEDTLS_PLATFORM_C */
 }
 
-int mbedtls_test_ascii2uc(const char c, unsigned char *uc)
+static int ascii2uc(const char c, unsigned char *uc)
 {
     if( ( c >= '0' ) && ( c <= '9' ) )
         *uc = c - '0';
@@ -89,10 +88,6 @@ void mbedtls_test_set_step( unsigned long step )
     mbedtls_test_info.step = step;
 }
 
-#if defined(MBEDTLS_BIGNUM_C)
-unsigned mbedtls_test_case_uses_negative_0 = 0;
-#endif
-
 void mbedtls_test_info_reset( void )
 {
     mbedtls_test_info.result = MBEDTLS_TEST_RESULT_SUCCESS;
@@ -102,20 +97,13 @@ void mbedtls_test_info_reset( void )
     mbedtls_test_info.filename = 0;
     memset( mbedtls_test_info.line1, 0, sizeof( mbedtls_test_info.line1 ) );
     memset( mbedtls_test_info.line2, 0, sizeof( mbedtls_test_info.line2 ) );
-#if defined(MBEDTLS_BIGNUM_C)
-    mbedtls_test_case_uses_negative_0 = 0;
-#endif
 }
 
 int mbedtls_test_equal( const char *test, int line_no, const char* filename,
                         unsigned long long value1, unsigned long long value2 )
 {
-    TEST_CF_PUBLIC( &value1, sizeof( value1 ) );
-    TEST_CF_PUBLIC( &value2, sizeof( value2 ) );
-
     if( value1 == value2 )
         return( 1 );
-
     if( mbedtls_test_info.result == MBEDTLS_TEST_RESULT_FAILED )
     {
         /* We've already recorded the test as having failed. Don't
@@ -131,60 +119,6 @@ int mbedtls_test_equal( const char *test, int line_no, const char* filename,
                              sizeof( mbedtls_test_info.line2 ),
                              "rhs = 0x%016llx = %lld",
                              value2, (long long) value2 );
-    return( 0 );
-}
-
-int mbedtls_test_le_u( const char *test, int line_no, const char* filename,
-                       unsigned long long value1, unsigned long long value2 )
-{
-    TEST_CF_PUBLIC( &value1, sizeof( value1 ) );
-    TEST_CF_PUBLIC( &value2, sizeof( value2 ) );
-
-    if( value1 <= value2 )
-        return( 1 );
-
-    if( mbedtls_test_info.result == MBEDTLS_TEST_RESULT_FAILED )
-    {
-        /* We've already recorded the test as having failed. Don't
-         * overwrite any previous information about the failure. */
-        return( 0 );
-    }
-    mbedtls_test_fail( test, line_no, filename );
-    (void) mbedtls_snprintf( mbedtls_test_info.line1,
-                             sizeof( mbedtls_test_info.line1 ),
-                             "lhs = 0x%016llx = %llu",
-                             value1, value1 );
-    (void) mbedtls_snprintf( mbedtls_test_info.line2,
-                             sizeof( mbedtls_test_info.line2 ),
-                             "rhs = 0x%016llx = %llu",
-                             value2, value2 );
-    return( 0 );
-}
-
-int mbedtls_test_le_s( const char *test, int line_no, const char* filename,
-                       long long value1, long long value2 )
-{
-    TEST_CF_PUBLIC( &value1, sizeof( value1 ) );
-    TEST_CF_PUBLIC( &value2, sizeof( value2 ) );
-
-    if( value1 <= value2 )
-        return( 1 );
-
-    if( mbedtls_test_info.result == MBEDTLS_TEST_RESULT_FAILED )
-    {
-        /* We've already recorded the test as having failed. Don't
-         * overwrite any previous information about the failure. */
-        return( 0 );
-    }
-    mbedtls_test_fail( test, line_no, filename );
-    (void) mbedtls_snprintf( mbedtls_test_info.line1,
-                             sizeof( mbedtls_test_info.line1 ),
-                             "lhs = 0x%016llx = %lld",
-                             (unsigned long long) value1, value1 );
-    (void) mbedtls_snprintf( mbedtls_test_info.line2,
-                             sizeof( mbedtls_test_info.line2 ),
-                             "rhs = 0x%016llx = %lld",
-                             (unsigned long long) value2, value2 );
     return( 0 );
 }
 
@@ -207,10 +141,10 @@ int mbedtls_test_unhexify( unsigned char *obuf,
 
     while( *ibuf != 0 )
     {
-        if ( mbedtls_test_ascii2uc( *(ibuf++), &uc ) != 0 )
+        if ( ascii2uc( *(ibuf++), &uc ) != 0 )
             return( -1 );
 
-        if ( mbedtls_test_ascii2uc( *(ibuf++), &uc2 ) != 0 )
+        if ( ascii2uc( *(ibuf++), &uc2 ) != 0 )
             return( -1 );
 
         *(obuf++) = ( uc << 4 ) | uc2;
@@ -350,3 +284,18 @@ void mbedtls_test_err_add_check( int high, int low,
     }
 }
 #endif /* MBEDTLS_TEST_HOOKS */
+
+#if defined(MBEDTLS_BIGNUM_C)
+int mbedtls_test_read_mpi( mbedtls_mpi *X, int radix, const char *s )
+{
+    /* mbedtls_mpi_read_string() currently retains leading zeros.
+     * It always allocates at least one limb for the value 0. */
+    if( s[0] == 0 )
+    {
+        mbedtls_mpi_free( X );
+        return( 0 );
+    }
+    else
+        return( mbedtls_mpi_read_string( X, radix, s ) );
+}
+#endif

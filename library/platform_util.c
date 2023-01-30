@@ -74,7 +74,6 @@ void mbedtls_platform_zeroize( void *buf, size_t len )
 #endif /* MBEDTLS_PLATFORM_ZEROIZE_ALT */
 
 #if defined(MBEDTLS_HAVE_TIME_DATE) && !defined(MBEDTLS_PLATFORM_GMTIME_R_ALT)
-#define __STDC_WANT_LIB_EXT1__ 1  /* Ask for the C11 gmtime_s() if it's available */
 #include <time.h>
 #if !defined(_WIN32) && (defined(unix) || \
     defined(__unix) || defined(__unix__) || (defined(__APPLE__) && \
@@ -93,10 +92,9 @@ void mbedtls_platform_zeroize( void *buf, size_t len )
  * threading.h. However, this macro is not part of the Mbed TLS public API, so
  * we keep it private by only defining it in this file
  */
-#if ! ( defined(_WIN32) && !defined(EFIX64) && !defined(EFI32) ) || \
-      ( defined(__MINGW32__) && !defined(__MINGW64_VERSION_MAJOR) )
+#if ! ( defined(_WIN32) && !defined(EFIX64) && !defined(EFI32) )
 #define PLATFORM_UTIL_USE_GMTIME
-#endif
+#endif /* ! ( defined(_WIN32) && !defined(EFIX64) && !defined(EFI32) ) */
 
 #endif /* !( ( defined(_POSIX_VERSION) && _POSIX_VERSION >= 200809L ) ||     \
              ( defined(_POSIX_THREAD_SAFE_FUNCTIONS ) &&                     \
@@ -105,13 +103,8 @@ void mbedtls_platform_zeroize( void *buf, size_t len )
 struct tm *mbedtls_platform_gmtime_r( const mbedtls_time_t *tt,
                                       struct tm *tm_buf )
 {
-#if defined(_WIN32) && !defined(PLATFORM_UTIL_USE_GMTIME)
-#if defined(__STDC_LIB_EXT1__)
-    return( ( gmtime_s( tt, tm_buf ) == 0 ) ? NULL : tm_buf );
-#else
-    /* MSVC and mingw64 argument order and return value are inconsistent with the C11 standard */
+#if defined(_WIN32) && !defined(EFIX64) && !defined(EFI32)
     return( ( gmtime_s( tm_buf, tt ) == 0 ) ? tm_buf : NULL );
-#endif
 #elif !defined(PLATFORM_UTIL_USE_GMTIME)
     return( gmtime_r( tt, tm_buf ) );
 #else
@@ -143,20 +136,3 @@ struct tm *mbedtls_platform_gmtime_r( const mbedtls_time_t *tt,
 void (*mbedtls_test_hook_test_fail)( const char *, int, const char *);
 #endif /* MBEDTLS_TEST_HOOKS */
 
-/*
- * Provide external definitions of some inline functions so that the compiler
- * has the option to not inline them
- */
-extern inline void mbedtls_xor( unsigned char *r, const unsigned char *a, const unsigned char *b, size_t n );
-
-extern inline uint16_t mbedtls_get_unaligned_uint16( const void *p );
-
-extern inline void mbedtls_put_unaligned_uint16( void *p, uint16_t x );
-
-extern inline uint32_t mbedtls_get_unaligned_uint32( const void *p );
-
-extern inline void mbedtls_put_unaligned_uint32( void *p, uint32_t x );
-
-extern inline uint64_t mbedtls_get_unaligned_uint64( const void *p );
-
-extern inline void mbedtls_put_unaligned_uint64( void *p, uint64_t x );

@@ -154,7 +154,8 @@ void mbedtls_x509_csr_init( mbedtls_x509_csr *csr );
 void mbedtls_x509_csr_free( mbedtls_x509_csr *csr );
 #endif /* MBEDTLS_X509_CSR_PARSE_C */
 
-/** \} name Structures and functions for X.509 Certificate Signing Requests (CSR) */
+/* \} name */
+/* \} addtogroup x509_module */
 
 #if defined(MBEDTLS_X509_CSR_WRITE_C)
 /**
@@ -184,7 +185,7 @@ int mbedtls_x509write_csr_set_subject_name( mbedtls_x509write_csr *ctx,
  *                  private key used to sign the CSR when writing it)
  *
  * \param ctx       CSR context to use
- * \param key       Asymmetric key to include
+ * \param key       Asymetric key to include
  */
 void mbedtls_x509write_csr_set_key( mbedtls_x509write_csr *ctx, mbedtls_pk_context *key );
 
@@ -295,8 +296,6 @@ int mbedtls_x509write_csr_pem( mbedtls_x509write_csr *ctx, unsigned char *buf, s
                        void *p_rng );
 #endif /* MBEDTLS_PEM_WRITE_C */
 #endif /* MBEDTLS_X509_CSR_WRITE_C */
-
-/** \} addtogroup x509_module */
 
 #ifdef __cplusplus
 }

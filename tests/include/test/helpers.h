@@ -37,7 +37,20 @@
 #define MBEDTLS_TEST_MUTEX_USAGE
 #endif
 
+#if defined(MBEDTLS_PLATFORM_C)
 #include "mbedtls/platform.h"
+#else
+#include <stdio.h>
+#define mbedtls_fprintf    fprintf
+#define mbedtls_snprintf   snprintf
+#define mbedtls_calloc     calloc
+#define mbedtls_free       free
+#define mbedtls_exit       exit
+#define mbedtls_time       time
+#define mbedtls_time_t     time_t
+#define MBEDTLS_EXIT_SUCCESS EXIT_SUCCESS
+#define MBEDTLS_EXIT_FAILURE EXIT_FAILURE
+#endif
 
 #include <stddef.h>
 #include <stdint.h>
@@ -45,13 +58,6 @@
 #if defined(MBEDTLS_BIGNUM_C)
 #include "mbedtls/bignum.h"
 #endif
-
-/** The type of test case arguments that contain binary data. */
-typedef struct data_tag
-{
-    uint8_t *   x;
-    uint32_t    len;
-} data_t;
 
 typedef enum
 {
@@ -149,48 +155,6 @@ int mbedtls_test_equal( const char *test, int line_no, const char* filename,
                         unsigned long long value1, unsigned long long value2 );
 
 /**
- * \brief           Record the current test case as a failure based
- *                  on comparing two unsigned integers.
- *
- *                  This function is usually called via the macro
- *                  #TEST_LE_U.
- *
- * \param test      Description of the failure or assertion that failed. This
- *                  MUST be a string literal. This normally has the form
- *                  "EXPR1 <= EXPR2" where EXPR1 has the value \p value1
- *                  and EXPR2 has the value \p value2.
- * \param line_no   Line number where the failure originated.
- * \param filename  Filename where the failure originated.
- * \param value1    The first value to compare.
- * \param value2    The second value to compare.
- *
- * \return          \c 1 if \p value1 <= \p value2, otherwise \c 0.
- */
-int mbedtls_test_le_u( const char *test, int line_no, const char* filename,
-                       unsigned long long value1, unsigned long long value2 );
-
-/**
- * \brief           Record the current test case as a failure based
- *                  on comparing two signed integers.
- *
- *                  This function is usually called via the macro
- *                  #TEST_LE_S.
- *
- * \param test      Description of the failure or assertion that failed. This
- *                  MUST be a string literal. This normally has the form
- *                  "EXPR1 <= EXPR2" where EXPR1 has the value \p value1
- *                  and EXPR2 has the value \p value2.
- * \param line_no   Line number where the failure originated.
- * \param filename  Filename where the failure originated.
- * \param value1    The first value to compare.
- * \param value2    The second value to compare.
- *
- * \return          \c 1 if \p value1 <= \p value2, otherwise \c 0.
- */
-int mbedtls_test_le_s( const char *test, int line_no, const char* filename,
-                       long long value1, long long value2 );
-
-/**
  * \brief          This function decodes the hexadecimal representation of
  *                 data.
  *
@@ -214,17 +178,6 @@ int mbedtls_test_unhexify( unsigned char *obuf, size_t obufmax,
 void mbedtls_test_hexify( unsigned char *obuf,
                           const unsigned char *ibuf,
                           int len );
-
-/**
- * \brief Convert hexadecimal digit to an integer.
- *
- * \param c        The digit to convert (`'0'` to `'9'`, `'A'` to `'F'` or
- *                 `'a'` to `'f'`).
- * \param[out] uc  On success, the value of the digit (0 to 15).
- *
- * \return         0 on success, -1 if \p c is not a hexadecimal digit.
- */
-int mbedtls_test_ascii2uc(const char c, unsigned char *uc);
 
 /**
  * Allocate and zeroize a buffer.
@@ -279,5 +232,26 @@ void mbedtls_test_mutex_usage_check( void );
 void mbedtls_test_err_add_check( int high, int low,
                                  const char *file, int line);
 #endif
+
+#if defined(MBEDTLS_BIGNUM_C)
+/** Read an MPI from a string.
+ *
+ * Like mbedtls_mpi_read_string(), but size the resulting bignum based
+ * on the number of digits in the string. In particular, construct a
+ * bignum with 0 limbs for an empty string, and a bignum with leading 0
+ * limbs if the string has sufficiently many leading 0 digits.
+ *
+ * This is important so that the "0 (null)" and "0 (1 limb)" and
+ * "leading zeros" test cases do what they claim.
+ *
+ * \param[out] X        The MPI object to populate. It must be initialized.
+ * \param radix         The radix (2 to 16).
+ * \param[in] s         The null-terminated string to read from.
+ *
+ * \return \c 0 on success, an \c MBEDTLS_ERR_MPI_xxx error code otherwise.
+ */
+/* Since the library has exactly the desired behavior, this is trivial. */
+int mbedtls_test_read_mpi( mbedtls_mpi *X, int radix, const char *s );
+#endif /* MBEDTLS_BIGNUM_C */
 
 #endif /* TEST_HELPERS_H */
